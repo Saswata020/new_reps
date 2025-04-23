@@ -1,0 +1,17 @@
+from scipy.stats import f_oneway
+
+anova_results = []
+for col in numerical_columns:
+    # collect each Tier-1 subgroup of values for this KPI
+    groups = [grp[col].dropna() 
+              for _, grp in summary.groupby('call_intent_tier1')]
+    # f_oneway requires two or more groups
+    f_stat, p_val = f_oneway(*groups)
+    anova_results.append({
+        'metric':  col,
+        'F_stat':  f_stat,
+        'p_value': p_val
+    })
+# turn into a DataFrame for easy viewing
+anova_df = pd.DataFrame(anova_results)
+print(anova_df)
