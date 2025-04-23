@@ -1,0 +1,195 @@
+✅ Code Walkthrough with Detailed Explanation
+📦 STEP 1: Create the Summary Table
+python
+Copy
+Edit
+df['tier_combo'] = df['call_intent_tier1'] + ' | ' + df['call_intent_tier2'] + ' | ' + df['call_intent_tier3']
+➡️ Creates a new combined string column showing Tier 1 → 2 → 3 path for each record.
+
+python
+Copy
+Edit
+numerical_columns = [
+    'total_calls', 'duration_seconds', 'denied_claims', 'approved_claims',
+    'manual_claims', 'auto_claims', 'new_cycle_time', 'new_provider_lag',
+    'adjusted_count', 'facility_count', 'professional_count'
+]
+➡️ Lists all numerical KPIs to be aggregated.
+
+python
+Copy
+Edit
+summary = df.groupby(['call_intent_tier1', 'call_intent_tier2', 'call_intent_tier3']).agg(
+    {col: 'mean' for col in numerical_columns}
+).reset_index()
+➡️ Groups the dataset by Tier 1, 2, 3 and calculates the average for each numerical KPI.
+
+python
+Copy
+Edit
+summary['call_load'] = summary['total_calls'] * summary['duration_seconds']
+➡️ Creates a new metric: Call Load = Total Calls × Duration, representing workload impact.
+
+🧪 STEP 2: ANOVA — KPI Comparison Across Tier 1
+python
+Copy
+Edit
+anova_results = []
+for col in numerical_columns:
+    anova = f_oneway(*[g[col].dropna() for _, g in summary.groupby('call_intent_tier1')])
+➡️ Runs ANOVA for each numerical KPI, comparing values across Tier 1 categories.
+
+python
+Copy
+Edit
+    anova_results.append({
+        'Test': 'ANOVA',
+        'Target': f'{col} ~ call_intent_tier1',
+        'P-Value': anova.pvalue,
+        'Insight': 'Significant' if anova.pvalue < 0.05 else 'Not significant'
+    })
+➡️ Stores result with insight: “Significant” if p < 0.05.
+
+🧪 STEP 3: T-Test — Comparing Two Tier 2 Categories
+python
+Copy
+Edit
+top2_tier2 = df['call_intent_tier2'].value_counts().index[:2]
+➡️ Selects the two most frequent Tier 2 values.
+
+python
+Copy
+Edit
+ttest_results = []
+for col in numerical_columns:
+    g1 = summary[summary['call_intent_tier2'] == top2_tier2[0]][col]
+    g2 = summary[summary['call_intent_tier2'] == top2_tier2[1]][col]
+➡️ Filters KPI data for each of those top 2 Tier 2 groups.
+
+python
+Copy
+Edit
+    ttest = ttest_ind(g1, g2, equal_var=False)
+➡️ Performs an independent t-test (Welch’s) to compare means.
+
+python
+Copy
+Edit
+    ttest_results.append({
+        'Test': 'T-Test',
+        'Target': f'{col} ~ {top2_tier2[0]} vs {top2_tier2[1]}',
+        'P-Value': ttest.pvalue,
+        'Insight': 'Significant' if ttest.pvalue < 0.05 else 'Not significant'
+    })
+➡️ Logs results with insight.
+
+🧪 STEP 4: Chi-Square — Claim Type vs Tiers
+python
+Copy
+Edit
+summary['claim_type'] = summary.apply(lambda x: 'Manual' if x['manual_claims'] > x['auto_claims'] else 'Auto', axis=1)
+➡️ Derives claim type (manual or auto) based on which count is higher.
+
+python
+Copy
+Edit
+for tier in ['call_intent_tier1', 'call_intent_tier2', 'call_intent_tier3']:
+    contingency = pd.crosstab(summary[tier], summary['claim_type'])
+➡️ Creates a contingency table of claim type vs each tier.
+
+python
+Copy
+Edit
+    chi2, p, _, _ = chi2_contingency(contingency)
+➡️ Runs Chi-Square test of independence.
+
+python
+Copy
+Edit
+    chi2_results.append({
+        'Test': 'Chi-Square',
+        'Target': f'claim_type vs {tier}',
+        'P-Value': p,
+        'Insight': 'Associated' if p < 0.05 else 'Not associated'
+    })
+➡️ Stores results with insight.
+
+📈 STEP 5: Correlation Matrix
+python
+Copy
+Edit
+correlation_matrix = summary[[
+    'call_load', 'denied_claims', 'approved_claims',
+    'manual_claims', 'auto_claims', 'new_cycle_time', 'new_provider_lag'
+]].corr()
+➡️ Calculates Pearson correlation between call load and all KPIs.
+
+python
+Copy
+Edit
+correlation_matrix.reset_index(inplace=True)
+➡️ Resets the index to make it ready for tabular viewing.
+
+🔍 STEP 6: K-Means Clustering
+python
+Copy
+Edit
+features = summary[['denied_claims', 'new_provider_lag', 'new_cycle_time', 'call_load']].fillna(0)
+➡️ Prepares features for clustering (fills missing with 0).
+
+python
+Copy
+Edit
+kmeans = KMeans(n_clusters=3, random_state=42)
+summary['cluster'] = kmeans.fit_predict(features)
+➡️ Runs K-Means to classify each Tier combo into one of 3 behavior clusters.
+
+🎯 STEP 7: Opportunity Score
+python
+Copy
+Edit
+summary['opportunity_score'] = summary['call_load'] * (
+    summary['denied_claims'] + summary['new_provider_lag'] + summary['new_cycle_time']
+)
+➡️ Computes a weighted metric to prioritize where improvements can reduce call burden the most.
+
+📊 STEP 8: Boxplot — Provider Lag by Tier 1
+python
+Copy
+Edit
+plt.figure(figsize=(12, 6))
+sns.boxplot(data=summary, x='call_intent_tier1', y='new_provider_lag')
+plt.title("Boxplot: Provider Lag by Tier 1")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+➡️ Displays spread and outliers of provider lag across Tier 1.
+
+🔥 STEP 9: Heatmap — KPI Correlation
+python
+Copy
+Edit
+plt.figure(figsize=(10, 8))
+sns.heatmap(summary[[
+    'call_load', 'denied_claims', 'approved_claims',
+    'manual_claims', 'auto_claims', 'new_cycle_time', 'new_provider_lag'
+]].corr(), annot=True, cmap='coolwarm')
+plt.title("Correlation Heatmap: Call Load vs KPIs")
+plt.show()
+➡️ Visual heatmap of how each KPI correlates with call load.
+
+🧾 Final Outputs
+python
+Copy
+Edit
+combined_tests = pd.DataFrame(anova_results + ttest_results + chi2_results)
+➡️ Combines all test results into one summary table.
+
+python
+Copy
+Edit
+tools.display_dataframe_to_user(name="Tier 1-2-3 Summary with Cluster & Opportunity Score", dataframe=summary)
+tools.display_dataframe_to_user(name="Statistical Test Results for All Relevant KPIs", dataframe=combined_tests)
+tools.display_dataframe_to_user(name="Correlation Matrix (Call Load vs KPIs)", dataframe=correlation_matrix)
+➡️ Displays the three core tables to the user: full analysis summary, test results, and correlation matrix.
+
